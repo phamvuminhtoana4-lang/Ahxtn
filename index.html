@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VÕ LÂM CHÍ TÔN: VẠN KIẾP BẤT TỬ</title>
+    <style>
+        :root { --gold: #ffd700; --red: #ff3300; --cyan: #00f2ff; --gui: rgba(20, 15, 10, 0.98); }
+        body, html { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', serif; color: white; user-select: none; touch-action: none; }
+        canvas { display: block; filter: saturate(1.4); }
+
+        /* UI HỆ THỐNG TÔNG MÔN & NHÂN VẬT */
+        #hud { position: fixed; inset: 0; pointer-events: none; z-index: 100; display: none; }
+        .panel { position: absolute; background: var(--gui); border: 2px solid #5c4033; border-radius: 10px; pointer-events: auto; padding: 12px; box-shadow: 0 0 20px #000; }
+        
+        #p-status { top: 15px; left: 15px; width: 320px; border-left: 5px solid var(--gold); }
+        .bar-wrap { width: 100%; height: 16px; background: #111; margin: 6px 0; border-radius: 8px; border: 1px solid #444; overflow: hidden; position: relative; }
+        #hp-bar { background: linear-gradient(90deg, #f00, #800); width: 100%; height: 100%; transition: 0.2s; }
+        #xp-bar { background: linear-gradient(90deg, #0f0, #050); width: 0%; height: 100%; }
+        #rage-bar { background: var(--cyan); width: 0%; height: 100%; box-shadow: 0 0 10px var(--cyan); }
+
+        /* KỸ NĂNG TÔNG MÔN */
+        #sect-info { position: absolute; top: 15px; right: 15px; text-align: right; font-weight: bold; color: var(--gold); text-shadow: 0 0 5px #000; }
+        
+        /* BOSS UI */
+        #boss-hud { position: fixed; top: 10%; left: 50%; transform: translateX(-50%); width: 60%; display: none; text-align: center; }
+        .boss-hp-bg { width: 100%; height: 15px; background: rgba(0,0,0,0.8); border: 1px solid #ff00ff; border-radius: 10px; overflow: hidden; }
+        #boss-hp-fill { background: linear-gradient(90deg, #ff00ff, #550055); width: 100%; height: 100%; }
+
+        /* ĐIỀU KHIỂN CHIẾN ĐẤU */
+        #joy-base { position: absolute; bottom: 40px; left: 40px; width: 130px; height: 130px; background: rgba(255,255,255,0.05); border-radius: 50%; border: 1px solid #555; pointer-events: auto; }
+        #joy-knob { position: absolute; top: 35px; left: 35px; width: 60px; height: 60px; background: radial-gradient(var(--gold), #840); border-radius: 50%; box-shadow: 0 0 20px var(--gold); }
+        
+        .skill-pad { position: absolute; bottom: 30px; right: 30px; pointer-events: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .btn { width: 80px; height: 80px; background: rgba(0,0,0,0.8); border: 2px solid var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; cursor: pointer; color: #fff; text-align: center; }
+        #btn-atk { width: 120px; height: 120px; grid-column: span 2; justify-self: end; background: radial-gradient(#f00, #400); font-size: 24px; border: 4px solid #fff; box-shadow: 0 0 20px rgba(255,0,0,0.5); }
+        #btn-ult { background: #60c; display: none; border-color: var(--cyan); animation: glow 1s infinite; }
+
+        @keyframes glow { 0%, 100% { box-shadow: 0 0 5px var(--cyan); } 50% { box-shadow: 0 0 25px var(--cyan); } }
+
+        /* MENU CHỌN TÔNG MÔN */
+        #menu { position: fixed; inset: 0; background: radial-gradient(circle, #300, #000); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .s-box { padding: 15px 40px; margin: 10px; border: 2px solid var(--gold); background: rgba(0,0,0,0.7); color: #fff; cursor: pointer; border-radius: 10px; width: 220px; text-align: center; font-weight: bold; transition: 0.2s; }
+        .s-box:hover { background: var(--gold); color: #000; }
+
+        #msg-log { position: absolute; bottom: 240px; left: 20px; font-size: 13px; color: #ddd; text-shadow: 1px 1px #000; pointer-events: none; }
+        #overlay { position: fixed; inset: 0; background: rgba(255,0,0,0.3); display: none; pointer-events: none; z-index: 1001; }
+    </style>
+</head>
+<body>
+
+<div id="overlay"></div>
+
+<div id="menu">
+    <h1 style="color:var(--gold); font-size: 45px; text-shadow: 0 0 20px red; margin:0">VÕ LÂM CHÍ TÔN</h1>
+    <p style="color:#888; letter-spacing:8px; margin-bottom:30px">XUẤT THẾ ANH HÙNG</p>
+    <div id="sect-picker"></div>
+</div>
+
+<div id="hud">
+    <div id="p-status" class="panel">
+        <div style="display:flex; justify-content:space-between">
+            <b id="ui-name" style="font-size:18px">Đại Hiệp</b>
+            <span id="ui-rank" style="color:var(--cyan)">Cấp 1 - Phàm Nhân</span>
+        </div>
+        <div class="bar-wrap"><div id="hp-bar"></div></div>
+        <div class="bar-wrap" style="height:10px"><div id="xp-bar"></div></div>
+        <div class="bar-wrap" style="height:6px"><div id="rage-bar"></div></div>
+        <div style="font-size:13px; margin-top:8px; display:flex; justify-content:space-between">
+            <span>Vàng: <b id="ui-gold" style="color:var(--gold)">0</b></span>
+            <button class="btn" style="width:100px; height:30px; border-radius:5px" onclick="game.openShop()">SHOP VŨ KHÍ</button>
+        </div>
+    </div>
+
+    <div id="sect-info">
+        Tông Môn: <span id="ui-sect-name">-</span><br>
+        Kỹ năng: <span id="ui-sect-skill" style="color:#fff">-</span>
+    </div>
+
+    <div id="boss-hud">
+        <div style="color:#ff0; font-weight:bold; text-shadow: 0 0 10px #000; margin-bottom:5px">MA VƯƠNG GIÁNG THẾ</div>
+        <div class="boss-hp-bg"><div id="boss-hp-fill"></div></div>
+    </div>
+
+    <div id="msg-log"></div>
+
+    <div id="joy-base"><div id="joy-knob"></div></div>
+    <div class="skill-pad">
+        <div class="btn" id="btn-ult" onclick="game.castUlt()">TUYỆT KỸ</div>
+        <div class="btn" onclick="game.dash()">KHINH CÔNG</div>
+        <div class="btn" id="btn-atk" onclick="game.atk()">ĐÁNH</div>
+    </div>
+</div>
+
+<div id="shop" class="panel" style="display:none; top:50%; left:50%; transform:translate(-50%,-50%); width:340px; z-index:1002">
+    <h2 style="text-align:center; color:var(--gold); margin:0 0 15px 0">KỲ TRÂN CÁC</h2>
+    <div id="shop-items" style="max-height:350px; overflow-y:auto"></div>
+    <button class="btn" style="width:100%; height:45px; border-radius:8px; margin-top:15px" onclick="game.closeShop()">ĐÓNG</button>
+</div>
+
+<canvas id="mainCanvas"></canvas>
+
+<script>
+const game = {
+    p: { x: 5000, y: 5000, hp: 250, max: 250, lv: 1, xp: 0, gold: 0, rage: 0, dmg: 30, spd: 5.5, weapon: 0, wing: false, mount: false, lean: 0, shake: 0, sect: null },
+    cam: { x: 5000, y: 5000 },
+    mobs: [], drops: [], parts: [], env: [], boss: null,
+    joy: { active: false, x: 0, y: 0 },
+    sects: [
+        {n:'Thiếu Lâm', c:'#ffcc00', s:'Như Lai Thần Chưởng', d: 1.5},
+        {n:'Võ Đang', c:'#00ffff', s:'Thái Cực Kiếm Pháp', d: 1.2},
+        {n:'Minh Giáo', c:'#ff3300', s:'Càn Khôn Đại Na Di', d: 2.0},
+        {n:'Cái Bang', c:'#8b4513', s:'Hàng Long Thập Bát Chưởng', d: 1.8}
+    ],
+    weaps: ["Kiếm Gỗ", "Thép Tinh Luyện", "Huyền Thiết Kiếm", "Ỷ Thiên Kiếm", "ĐỒ LONG ĐAO"],
+    ranks: ["Phàm Nhân", "Luyện Khí", "Trúc Cơ", "Kim Đan", "Nguyên Anh", "Hóa Thần", "ĐẠI ĐẾ"],
+
+    init() {
+        this.cvs = document.getElementById('mainCanvas');
+        this.ctx = this.cvs.getContext('2d');
+        this.resize(); window.onresize = () => this.resize();
+        
+        this.sects.forEach(s => {
+            const b = document.createElement('div'); b.className = 's-box';
+            b.innerText = s.n; b.onclick = () => this.start(s);
+            document.getElementById('sect-picker').appendChild(b);
+        });
+
+        this.setupJoy();
+        this.createWorld();
+        setInterval(() => this.spawnBoss(), 40000);
+    },
+
+    resize() { this.cvs.width = window.innerWidth; this.cvs.height = window.innerHeight; },
+
+    createWorld() {
+        for(let i=0; i<400; i++) {
+            this.env.push({ x: Math.random()*10000, y: Math.random()*10000, t: Math.random() > 0.4 ? 'grass' : 'stone', s: 0.5+Math.random() });
+        }
+    },
+
+    start(s) {
+        this.p.sect = s;
+        document.getElementById('menu').style.display = 'none';
+        document.getElementById('hud').style.display = 'block';
+        document.getElementById('ui-sect-name').innerText = s.n;
+        document.getElementById('ui-sect-skill').innerText = s.s;
+        for(let i=0; i<40; i++) this.spawnMob();
+        this.loop();
+    },
+
+    spawnMob() {
+        this.mobs.push({ x: this.p.x + (Math.random()-0.5)*2500, y: this.p.y + (Math.random()-0.5)*2500, hp: 120, max: 120, spd: 1.5 + Math.random() });
+    },
+
+    spawnBoss() {
+        this.boss = { x: this.p.x + 800, y: this.p.y, hp: 6000, max: 6000, spd: 2.6, isBoss: true };
+        document.getElementById('boss-hud').style.display = 'block';
+        this.log("⚠️ CHÍNH TÀ PHÂN TRANH: MA VƯƠNG XUẤT THẾ!");
+    },
+
+    setupJoy() {
+        const base = document.getElementById('joy-base'), knob = document.getElementById('joy-knob');
+        const move = (e) => {
+            if(!this.joy.active) return;
+            const t = e.touches ? e.touches[0] : e, r = base.getBoundingClientRect();
+            const dx = t.clientX - (r.left + 65), dy = t.clientY - (r.top + 65);
+            const d = Math.min(50, Math.hypot(dx, dy)), a = Math.atan2(dy, dx);
+            this.joy.x = Math.cos(a) * (d/50); this.joy.y = Math.sin(a) * (d/50);
+            knob.style.transform = `translate(${Math.cos(a)*d}px, ${Math.sin(a)*d}px)`;
+            this.p.lean = this.joy.x * 0.5;
+        };
+        base.ontouchstart = (e) => { this.joy.active = true; move(e); };
+        window.ontouchmove = move;
+        window.ontouchend = () => { this.joy.active = false; this.joy.x = 0; this.joy.y = 0; knob.style.transform = ''; this.p.lean = 0; };
+    },
+
+    atk() {
+        let hit = false;
+        const targets = this.boss ? [...this.mobs, this.boss] : this.mobs;
+        targets.forEach(m => {
+            let d = Math.hypot(m.x - this.p.x, m.y - this.p.y);
+            if(d < 150) {
+                let damage = this.p.dmg * (m.isBoss ? 0.8 : 1);
+                m.hp -= damage; hit = true;
+                m.x += (m.x - this.p.x) * 0.3; m.y += (m.y - this.p.y) * 0.3; // Knockback mạnh
+                this.eff(m.x, m.y, "#f00", 12); // Blood VFX
+                if(m.hp <= 0) {
+                    if(m.isBoss) { this.p.gold += 8000; this.p.xp += 100; this.boss = null; document.getElementById('boss-hud').style.display = 'none'; }
+                    else {
+                        this.p.gold += 60; this.p.xp += 30; this.p.rage = Math.min(100, this.p.rage + 12);
+                        if(Math.random() > 0.45) this.drops.push({x: m.x, y: m.y, t: 'hp'});
+                        this.mobs.splice(this.mobs.indexOf(m), 1); setTimeout(() => this.spawnMob(), 2000);
+                    }
+                    this.checkLv();
+                }
+            }
+        });
+        if(hit) this.p.shake = 12;
+    },
+
+    dash() {
+        const os = this.p.spd; this.p.spd = 25;
+        this.eff(this.p.x, this.p.y, "#fff", 25);
+        setTimeout(() => this.p.spd = os, 200);
+    },
+
+    castUlt() {
+        if(this.p.rage < 100) return;
+        this.p.rage = 0; this.p.shake = 40;
+        this.eff(this.p.x, this.p.y, this.p.sect.c, 150);
+        this.log(`💥 ${this.p.sect.s.toUpperCase()}!`);
+        this.mobs.forEach(m => { if(Math.hypot(m.x-this.p.x, m.y-this.p.y) < 450) m.hp -= 600; });
+        if(this.boss && Math.hypot(this.boss.x-this.p.x, this.boss.y-this.p.y) < 450) this.boss.hp -= 1200;
+    },
+
+    checkLv() {
+        if(this.p.xp >= 100) {
+            this.p.lv++; this.p.xp = 0; this.p.max += 100; this.p.hp = this.p.max; this.p.dmg += 25;
+            if(this.p.lv === 5) this.p.wing = true;
+            if(this.p.lv === 10) this.p.mount = true;
+            const rIdx = Math.min(this.ranks.length-1, Math.floor(this.p.lv/5));
+            document.getElementById('ui-rank').innerText = `Lv.${this.p.lv} - ${this.ranks[rIdx]}`;
+            this.log(`✨ ĐỘT PHÁ CẢNH GIỚI: ${this.ranks[rIdx]}`);
+        }
+    },
+
+    update() {
+        this.p.x += this.joy.x * (this.p.mount ? this.p.spd*1.7 : this.p.spd);
+        this.p.y += this.joy.y * (this.p.mount ? this.p.spd*1.7 : this.p.spd);
+        this.cam.x += (this.p.x - this.cam.x) * 0.1;
+        this.cam.y += (this.p.y - this.cam.y) * 0.1;
+
+        const targets = this.boss ? [...this.mobs, this.boss] : this.mobs;
+        targets.forEach(m => {
+            let d = Math.hypot(this.p.x - m.x, this.p.y - m.y);
+            if(d < 650) {
+                let a = Math.atan2(this.p.y - m.y, this.p.x - m.x);
+                m.x += Math.cos(a) * m.spd; m.y += Math.sin(a) * m.spd;
+                if(d < 70 && Math.random() < 0.07) {
+                    this.p.hp -= (m.isBoss ? 30 : 8);
+                    this.p.shake = 15; this.flash();
+                }
+            }
+        });
+
+        this.drops.forEach((d, i) => {
+            if(Math.hypot(this.p.x - d.x, this.p.y - d.y) < 70) {
+                this.p.hp = Math.min(this.p.max, this.p.hp + 70);
+                this.drops.splice(i, 1);
+                this.log("💊 CẮN ĐAN DƯỢC - HỒI PHỤC SINH LỰC");
+            }
+        });
+
+        if(this.p.shake > 0) this.p.shake *= 0.85;
+        if(this.p.hp <= 0) { alert("TRẬN VONG! TU VI HỦY DIỆT."); location.reload(); }
+
+        document.getElementById('hp-bar').style.width = (this.p.hp/this.p.max*100)+'%';
+        document.getElementById('xp-bar').style.width = this.p.xp+'%';
+        document.getElementById('rage-bar').style.width = this.p.rage+'%';
+        document.getElementById('btn-ult').style.display = this.p.rage >= 100 ? 'flex' : 'none';
+        document.getElementById('ui-gold').innerText = this.p.gold.toLocaleString();
+        if(this.boss) document.getElementById('boss-hp-fill').style.width = (this.boss.hp/this.boss.max*100)+'%';
+    },
+
+    flash() { const f = document.getElementById('overlay'); f.style.display = 'block'; setTimeout(() => f.style.display = 'none', 100); },
+
+    draw() {
+        const {ctx, cvs, cam, p} = this;
+        ctx.fillStyle = "#0a100a"; ctx.fillRect(0, 0, cvs.width, cvs.height);
+
+        ctx.save();
+        ctx.translate(cvs.width/2 - cam.x + (Math.random()-0.5)*p.shake, cvs.height/2 - cam.y + (Math.random()-0.5)*p.shake);
+
+        // Map (Cỏ và Đá)
+        this.env.forEach(e => {
+            ctx.fillStyle = e.t === 'grass' ? '#152515' : '#2a2a2a';
+            ctx.beginPath();
+            if(e.t === 'stone') ctx.rect(e.x, e.y, 50*e.s, 40*e.s);
+            else ctx.arc(e.x, e.y, 30*e.s, 0, 7);
+            ctx.fill();
+        });
+
+        // Quái vật & Boss
+        this.mobs.forEach(m => this.drawStick(m.x, m.y, '#f33', 0, m.hp, m.max, 1.2));
+        if(this.boss) this.drawStick(this.boss.x, this.boss.y, '#f0f', 0, this.boss.hp, this.boss.max, 5);
+
+        // Vật phẩm rơi
+        this.drops.forEach(d => {
+            ctx.fillStyle = '#0f0'; ctx.shadowBlur = 20; ctx.shadowColor = '#0f0';
+            ctx.beginPath(); ctx.arc(d.x, d.y, 14, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+        });
+
+        // Hạt hiệu ứng (Máu/Nổ)
+        this.parts = this.parts.filter(pt => {
+            ctx.globalAlpha = pt.l/30; ctx.fillStyle = pt.c;
+            ctx.beginPath(); ctx.arc(pt.x, pt.y, 3.5, 0, 7); ctx.fill();
+            pt.x += pt.vx; pt.y += pt.vy; pt.l--; return pt.l > 0;
+        });
+
+        ctx.restore();
+        // Vẽ nhân vật chính tại tâm màn hình
+        this.drawStick(cvs.width/2, cvs.height/2, p.sect.c, p.lean, null, null, 2.2, true);
+    },
+
+    drawStick(x, y, col, lean, hp, max, sc=1, isP=false) {
+        const ctx = this.ctx; ctx.strokeStyle = col; ctx.lineWidth = 4.5*sc; ctx.lineCap = 'round';
+        ctx.save(); ctx.translate(x, y); ctx.rotate(lean);
+        
+        if(isP) {
+            if(this.p.wing) { // Cánh Thần Ma
+                ctx.strokeStyle = "rgba(0, 242, 255, 0.7)"; ctx.shadowBlur = 20; ctx.shadowColor = "#00f2ff";
+                ctx.beginPath(); ctx.moveTo(0,-45); ctx.lineTo(-80, -100); ctx.moveTo(0,-45); ctx.lineTo(80, -100); ctx.stroke(); ctx.shadowBlur = 0;
+            }
+            if(this.p.mount) { // Hỏa Kỳ Lân
+                ctx.strokeStyle = "#ff4400"; ctx.shadowBlur = 15; ctx.shadowColor = "red";
+                ctx.beginPath(); ctx.ellipse(0, 25, 45, 15, 0, 0, 7); ctx.stroke(); ctx.shadowBlur = 0;
+            }
+            if(this.p.weapon > 0) { // Thần Binh
+                ctx.strokeStyle = "#fff"; ctx.shadowBlur = 12; ctx.beginPath(); ctx.moveTo(35, -25); ctx.lineTo(70, -90); ctx.stroke(); ctx.shadowBlur = 0;
+            }
+        }
+
+        ctx.strokeStyle = col;
+        ctx.beginPath(); ctx.arc(0, -55*sc, 13*sc, 0, 7); ctx.stroke(); // Đầu
+        ctx.beginPath(); ctx.moveTo(0, -42*sc); ctx.lineTo(0, -5*sc); ctx.stroke(); // Thân
+        let a = Math.sin(Date.now()*0.013)*18;
+        ctx.beginPath(); ctx.moveTo(0, -38*sc); ctx.lineTo(-28*sc, (-18+a)*sc); ctx.stroke(); // Tay
+        ctx.beginPath(); ctx.moveTo(0, -38*sc); ctx.lineTo(28*sc, (-18-a)*sc); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -5*sc); ctx.lineTo((-18+a)*sc, 22*sc); ctx.stroke(); // Chân
+        ctx.beginPath(); ctx.moveTo(0, -5*sc); ctx.lineTo((18-a)*sc, 22*sc); ctx.stroke();
+        ctx.restore();
+
+        if(hp !== null) {
+            ctx.fillStyle = "#000"; ctx.fillRect(x-35*sc, y-100*sc, 70*sc, 8);
+            ctx.fillStyle = col; ctx.fillRect(x-35*sc, y-100*sc, (hp/max)*70*sc, 8);
+        }
+    },
+
+    eff(x, y, c, n) { for(let i=0; i<n; i++) this.parts.push({x, y, c, vx:(Math.random()-0.5)*16, vy:(Math.random()-0.5)*16, l:30}); },
+    log(m) { const l = document.getElementById('msg-log'); l.innerHTML = `<div style="color:var(--gold)">> ${m}</div>` + l.innerHTML; if(l.children.length > 6) l.lastChild.remove(); },
+    
+    openShop() {
+        document.getElementById('shop').style.display = 'block';
+        const c = document.getElementById('shop-items'); c.innerHTML = '';
+        this.weaps.forEach((w, i) => {
+            let p = (i+1)*1500;
+            c.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; padding:15px; border-bottom:1px solid #444">
+                <span><b>${w}</b><br><small style="color:lime">+${(i+1)*45} Công Lực</small></span>
+                <button onclick="game.buy(${i+1}, ${p})" style="background:var(--gold); border:none; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer">${p}V</button>
+            </div>`;
+        });
+    },
+    buy(lv, p) {
+        if(this.p.gold >= p) { this.p.gold -= p; this.p.weapon = lv; this.p.dmg = 30 + lv*45; this.log("⚔️ CƯỜNG HÓA THÀNH CÔNG: " + this.weaps[lv-1]); this.closeShop(); }
+        else alert("VÀNG KHÔNG ĐỦ!");
+    },
+    closeShop() { document.getElementById('shop').style.display = 'none'; },
+    loop() { this.update(); this.draw(); requestAnimationFrame(() => this.loop()); }
+};
+game.init();
+</script>
+</body>
+  </html>
+  
